@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumina | Modern Interactive Image Gallery</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'scale(0.96) translateY(10px)' },
+              '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+            },
+            modalPop: {
+              '0%': { opacity: '0', transform: 'scale(0.95)' },
+              '100%': { opacity: '1', transform: 'scale(1)' }
+            }
+          },
+          animation: {
+            fadeIn: 'fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            modalPop: 'modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom clean scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Masonry column break avoidance */
+    .gallery-card {
+      break-inside: avoid;
+      backface-visibility: hidden;
+      transform: translateZ(0);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, opacity 0.3s ease;
+    }
+
+    /* Lightbox smooth zoom styling */
+    .lightbox-img {
+      transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+      cursor: grab;
+      user-select: none;
+    }
+    .lightbox-img:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans selection:bg-brand-500 selection:text-white flex flex-col antialiased">
+
+  <header class="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/25">
+          <i data-lucide="sparkles" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <span class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">Lumina</span>
+          <span class="text-xs uppercase tracking-widest text-brand-400 block font-semibold">Exhibition</span>
+        </div>
+      </div>
+
+      <!-- Search Input -->
+      <div class="relative flex-1 max-w-md hidden sm:block">
+        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+          <i data-lucide="search" class="w-4 h-4"></i>
+        </div>
+        <input 
+          type="text" 
+          id="search-input"
+          placeholder="Search by title, location, tags..." 
+          class="w-full pl-10 pr-10 py-2.5 rounded-full bg-slate-900 border border-slate-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all duration-200 shadow-inner"
+        >
+        <button id="clear-search-btn" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300 hidden">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="flex items-center gap-2">
+        <button id="fav-filter-btn" class="flex items-center gap-2 px-3.5 py-2 rounded-full border border-slate-800 bg-slate-900 hover:bg-slate-800/80 text-xs sm:text-sm font-medium text-slate-300 hover:text-white transition-all shadow-sm">
+          <i data-lucide="heart" class="w-4 h-4 text-rose-500"></i>
+          <span>Favorites (<span id="fav-count">0</span>)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Search bar -->
+    <div class="px-4 pb-4 sm:hidden">
+      <div class="relative w-full">
+        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+          <i data-lucide="search" class="w-4 h-4"></i>
+        </div>
+        <input 
+          type="text" 
+          id="mobile-search-input"
+          placeholder="Search photographs..." 
+          class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+        >
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    
+    <!-- Hero Header -->
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-800/60 pb-6">
+      <div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-2">
+          Curated Visual Collection
+        </h1>
+        <p class="text-slate-400 text-sm sm:text-base max-w-2xl leading-relaxed">
+          Explore stunning high-resolution photography captured worldwide. Filter through themes, inspect details in lightbox mode, or bookmark your personal favorites.
+        </p>
+      </div>
+      
+      <!-- Stats / Count Indicator -->
+      <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-900/60 border border-slate-800 px-3.5 py-1.5 rounded-full w-fit">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="showing-count">Showing 12 Photos</span>
+      </div>
+    </div>
+
+    <!-- Category Filter Tabs -->
+    <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none no-scrollbar" id="category-filters">
+      <!-- Buttons dynamically injected via JS with badges -->
+    </div>
+
+    <div id="gallery-container" class="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-5 space-y-5">
+      <!-- Dynamic Photo Cards will be injected here -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="hidden text-center py-20 px-4">
+      <div class="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto mb-4 text-slate-500">
+        <i data-lucide="image-off" class="w-8 h-8"></i>
+      </div>
+      <h3 class="text-lg font-semibold text-slate-200 mb-1">No matching photographs</h3>
+      <p class="text-sm text-slate-400 max-w-sm mx-auto mb-6">We couldn't find anything matching your filter criteria or search keyword.</p>
+      <button id="reset-filters-btn" class="px-5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-full text-sm font-medium transition shadow-lg shadow-brand-500/20">
+        Reset All Filters
+      </button>
+    </div>
+
+  </main>
+
+  <footer class="mt-auto border-t border-slate-900 bg-slate-950/60 py-6 text-center text-xs text-slate-500">
+    <p>© 2026 Lumina Photography Showcase. High-resolution photos sourced from Unsplash.</p>
+  </footer>
+
+  <div id="lightbox-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-xl opacity-0 pointer-events-none transition-opacity duration-300">
+    
+    <!-- Top Modal Bar -->
+    <div class="absolute top-0 inset-x-0 h-16 px-4 sm:px-6 flex items-center justify-between z-20 bg-gradient-to-b from-slate-950/90 to-transparent">
+      <!-- Counter & Title -->
+      <div class="flex items-center gap-4">
+        <span id="lb-counter" class="text-xs font-mono px-2.5 py-1 rounded bg-slate-800/80 text-slate-300 border border-slate-700/60">
+          01 / 12
+        </span>
+        <h4 id="lb-title-top" class="text-sm font-semibold text-white truncate max-w-[200px] sm:max-w-md hidden sm:block">
+          Photo Title
+        </h4>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-1 sm:gap-2">
+        <button id="lb-zoom-out" title="Zoom Out" class="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition">
+          <i data-lucide="zoom-out" class="w-5 h-5"></i>
+        </button>
+        <button id="lb-zoom-in" title="Zoom In" class="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition">
+          <i data-lucide="zoom-in" class="w-5 h-5"></i>
+        </button>
+        <button id="lb-zoom-reset" title="Reset Zoom" class="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition">
+          <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+        </button>
+        <button id="lb-toggle-info" title="Toggle Info Panel" class="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition">
+          <i data-lucide="info" class="w-5 h-5"></i>
+        </button>
+        <button id="lb-download" title="Open Full Resolution" class="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition">
+          <i data-lucide="external-link" class="w-5 h-5"></i>
+        </button>
+        <div class="h-6 w-px bg-slate-800 mx-1"></div>
+        <button id="lb-close" title="Close (Esc)" class="p-2 rounded-full bg-slate-800/60 hover:bg-rose-500/20 hover:text-rose-400 text-slate-300 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation Arrows -->
+    <button id="lb-prev" class="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-20 p-3 sm:p-4 rounded-full bg-slate-900/60 hover:bg-slate-800/90 text-white backdrop-blur border border-slate-800/80 shadow-2xl transition hover:scale-110 active:scale-95">
+      <i data-lucide="chevron-left" class="w-6 h-6"></i>
+    </button>
+
+    <button id="lb-next" class="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-20 p-3 sm:p-4 rounded-full bg-slate-900/60 hover:bg-slate-800/90 text-white backdrop-blur border border-slate-800/80 shadow-2xl transition hover:scale-110 active:scale-95">
+      <i data-lucide="chevron-right" class="w-6 h-6"></i>
+    </button>
+
+    <!-- Main Viewport for Lightbox Image -->
+    <div id="lb-viewport" class="relative w-full h-full flex items-center justify-center p-4 sm:p-12 overflow-hidden">
+      <div id="lb-image-container" class="relative flex items-center justify-center max-w-full max-h-full">
+        <img 
+          id="lb-image" 
+          src="" 
+          alt="" 
+          class="lightbox-img max-w-full max-h-[82vh] rounded-lg shadow-2xl object-contain pointer-events-auto"
+        >
+      </div>
+    </div>
+
+    <!-- Slide-over Metadata Panel -->
+    <aside id="lb-info-panel" class="absolute bottom-0 sm:bottom-auto sm:right-0 sm:top-16 sm:h-[calc(100%-4rem)] w-full sm:w-80 md:w-96 bg-slate-900/95 backdrop-blur-xl border-t sm:border-t-0 sm:border-l border-slate-800 p-6 z-30 transition-transform duration-300 ease-in-out translate-y-full sm:translate-y-0 sm:translate-x-full overflow-y-auto max-h-[60vh] sm:max-h-full">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <span class="text-xs font-semibold text-brand-400 uppercase tracking-wider" id="lb-category">Category</span>
+        <button id="lb-close-info" class="p-1 rounded text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="mt-4 space-y-4">
+        <div>
+          <h3 id="lb-detail-title" class="text-xl font-bold text-white mb-1">Image Title</h3>
+          <p id="lb-detail-desc" class="text-slate-400 text-sm leading-relaxed">Description goes here.</p>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800/80 space-y-2.5 text-xs text-slate-300">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-500 flex items-center gap-1.5"><i data-lucide="user" class="w-3.5 h-3.5"></i> Photographer</span>
+            <span id="lb-photographer" class="font-medium text-slate-200">Name</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-500 flex items-center gap-1.5"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Location</span>
+            <span id="lb-location" class="font-medium text-slate-200">Place</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-500 flex items-center gap-1.5"><i data-lucide="camera" class="w-3.5 h-3.5"></i> Camera</span>
+            <span id="lb-camera" class="font-medium text-slate-200">Model</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-500 flex items-center gap-1.5"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Resolution</span>
+            <span id="lb-res" class="font-medium text-slate-200">5400 x 3600</span>
+          </div>
+        </div>
+
+        <!-- Tags -->
+        <div class="pt-3 border-t border-slate-800/80">
+          <span class="text-xs text-slate-500 block mb-2 font-medium">Tags</span>
+          <div id="lb-tags" class="flex flex-wrap gap-1.5">
+            <!-- Tag pills -->
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <script>
+    // Curated high quality gallery data set
+    const galleryItems = [
+      {
+        id: 1,
+        title: "Ethereal Alpine Peaks",
+        category: "Nature",
+        location: "Dolomites, Italy",
+        photographer: "Luca Bravo",
+        camera: "Sony Alpha A7R IV",
+        resolution: "6000 x 4000",
+        description: "Jagged dolomitic peaks emerging through dense morning clouds, backlit by the first warm rays of sunrise.",
+        tags: ["mountains", "alps", "sunrise", "fog", "italy"],
+        url: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=700&q=80",
+        aspect: "tall"
+      },
+      {
+        id: 2,
+        title: "Geometric Modernity",
+        category: "Architecture",
+        location: "Valencia, Spain",
+        photographer: "Joel Filipe",
+        camera: "Canon EOS 5D Mark IV",
+        resolution: "5800 x 3800",
+        description: "Futuristic lines and curved white architecture contrasting against a vivid Mediterranean blue sky.",
+        tags: ["minimal", "curved", "white", "structure", "city"],
+        url: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=700&q=80",
+        aspect: "wide"
+      },
+      {
+        id: 3,
+        title: "Neon Rain Reflections",
+        category: "Urban",
+        location: "Shinjuku, Tokyo",
+        photographer: "Aleksandar Pasaric",
+        camera: "Fujifilm X-T4",
+        resolution: "6240 x 4160",
+        description: "Vibrant city night life reflected on slick asphalt streets immediately following a torrential summer downpour.",
+        tags: ["tokyo", "rain", "neon", "cyberpunk", "night"],
+        url: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=700&q=80",
+        aspect: "tall"
+      },
+      {
+        id: 4,
+        title: "Majestic Arctic Fox",
+        category: "Wildlife",
+        location: "Svalbard, Norway",
+        photographer: "Jonatan Pie",
+        camera: "Nikon Z9",
+        resolution: "8256 x 5504",
+        description: "An arctic fox with thick winter plumage curled against snowy winds on the tundra.",
+        tags: ["arctic", "fox", "snow", "winter", "fauna"],
+        url: "https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=700&q=80",
+        aspect: "square"
+      },
+      {
+        id: 5,
+        title: "Liquid Chroma Flow",
+        category: "Abstract",
+        location: "Studio Production",
+        photographer: "Pawel Czerwinski",
+        camera: "Hasselblad H6D-100c",
+        resolution: "11600 x 8700",
+        description: "High-speed macro capture of iridescent inks suspended in viscous oil creating celestial wave forms.",
+        tags: ["abstract", "color", "texture", "paint", "waves"],
+        url: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=700&q=80",
+        aspect: "tall"
+      },
+      {
+        id: 6,
+        title: "Emerald Coastline Solitude",
+        category: "Travel",
+        location: "Lofoten Islands, Norway",
+        photographer: "Karsten Würth",
+        camera: "Sony Alpha A1",
+        resolution: "8640 x 5760",
+        description: "A lone red fisherman's cabin perched below towering granite walls and crystal-clear turquoise waters.",
+        tags: ["norway", "ocean", "cabin", "fjords", "scenic"],
+        url: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=700&q=80",
+        aspect: "wide"
+      },
+      {
+        id: 7,
+        title: "Golden Hour Sand Ridges",
+        category: "Nature",
+        location: "Namib-Naukluft, Namibia",
+        photographer: "Jeremy Bishop",
+        camera: "Leica Q2",
+        resolution: "8368 x 5584",
+        description: "Undulating dunes forming dramatic contrast between warm sun-drenched crests and razor-sharp shadow valleys.",
+        tags: ["desert", "sand", "dunes", "sunset", "minimal"],
+        url: "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=700&q=80",
+        aspect: "square"
+      },
+      {
+        id: 8,
+        title: "The Spiral Continuum",
+        category: "Architecture",
+        location: "Berlin, Germany",
+        photographer: "Christian Perner",
+        camera: "Sony A7 III",
+        resolution: "6000 x 4000",
+        description: "A dizzying top-down perspective through an immaculate Bauhaus-inspired concrete helical staircase.",
+        tags: ["spiral", "stairs", "geometry", "blackandwhite", "monochrome"],
+        url: "https://images.unsplash.com/photo-1513584684374-8bab748fbf90?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1513584684374-8bab748fbf90?auto=format&fit=crop&w=700&q=80",
+        aspect: "tall"
+      },
+      {
+        id: 9,
+        title: "Midnight Alley Rendezvous",
+        category: "Urban",
+        location: "Hong Kong",
+        photographer: "Steven Diaz",
+        camera: "Leica M10",
+        resolution: "5976 x 3992",
+        description: "Steaming kitchen exhaust vents, glowing vertical signage, and moody cinematic atmosphere in a cramped laneway.",
+        tags: ["hongkong", "street", "alley", "night", "moody"],
+        url: "https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=700&q=80",
+        aspect: "wide"
+      },
+      {
+        id: 10,
+        title: "Grizzly in the Shallows",
+        category: "Wildlife",
+        location: "Katmai National Park, Alaska",
+        photographer: "Thomas Lefebvre",
+        camera: "Canon EOS R5",
+        resolution: "8192 x 5464",
+        description: "A massive brown bear patiently waiting for migrating sockeye salmon in rushing river currents.",
+        tags: ["bear", "alaska", "river", "wildlife", "predator"],
+        url: "https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?auto=format&fit=crop&w=700&q=80",
+        aspect: "tall"
+      },
+      {
+        id: 11,
+        title: "Prismatic Wave Distortions",
+        category: "Abstract",
+        location: "Synthesized Optics",
+        photographer: "Milad Fakurian",
+        camera: "Computational Render",
+        resolution: "7680 x 4320",
+        description: "Refracted glass ribbons splitting white ambient lighting into hyper-saturated spectral color bands.",
+        tags: ["refraction", "glass", "prism", "glow", "render"],
+        url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=700&q=80",
+        aspect: "wide"
+      },
+      {
+        id: 12,
+        title: "Sunrise at Hot Air Horizons",
+        category: "Travel",
+        location: "Cappadocia, Turkey",
+        photographer: "Yonatan Mirsky",
+        camera: "Sony A7R III",
+        resolution: "7952 x 5304",
+        description: "Scores of colorful hot air balloons ascending over fairy chimneys as dawn paints the Anatolian valleys.",
+        tags: ["balloons", "cappadocia", "sunrise", "adventure", "turkey"],
+        url: "https://images.unsplash.com/photo-1507608869274-d3177c8bb4c7?auto=format&fit=crop&w=1400&q=85",
+        thumbUrl: "https://images.unsplash.com/photo-1507608869274-d3177c8bb4c7?auto=format&fit=crop&w=700&q=80",
+        aspect: "tall"
+      }
+    ];
+
+    // State Variables
+    let currentCategory = "All";
+    let searchQuery = "";
+    let onlyFavorites = false;
+    let favorites = new Set([1, 4]); // Initial demo favorites
+    let activeLightboxIndex = 0;
+    let filteredList = [...galleryItems];
+    let zoomLevel = 1;
+    let isInfoPanelOpen = false;
+
+    // Elements
+    const galleryContainer = document.getElementById("gallery-container");
+    const categoryFiltersContainer = document.getElementById("category-filters");
+    const searchInput = document.getElementById("search-input");
+    const mobileSearchInput = document.getElementById("mobile-search-input");
+    const clearSearchBtn = document.getElementById("clear-search-btn");
+    const favFilterBtn = document.getElementById("fav-filter-btn");
+    const favCountSpan = document.getElementById("fav-count");
+    const showingCountSpan = document.getElementById("showing-count");
+    const emptyState = document.getElementById("empty-state");
+    const resetFiltersBtn = document.getElementById("reset-filters-btn");
+
+    // Lightbox Elements
+    const lightboxModal = document.getElementById("lightbox-modal");
+    const lbImage = document.getElementById("lb-image");
+    const lbCounter = document.getElementById("lb-counter");
+    const lbTitleTop = document.getElementById("lb-title-top");
+    const lbDetailTitle = document.getElementById("lb-detail-title");
+    const lbDetailDesc = document.getElementById("lb-detail-desc");
+    const lbCategory = document.getElementById("lb-category");
+    const lbPhotographer = document.getElementById("lb-photographer");
+    const lbLocation = document.getElementById("lb-location");
+    const lbCamera = document.getElementById("lb-camera");
+    const lbRes = document.getElementById("lb-res");
+    const lbTags = document.getElementById("lb-tags");
+    const lbPrevBtn = document.getElementById("lb-prev");
+    const lbNextBtn = document.getElementById("lb-next");
+    const lbCloseBtn = document.getElementById("lb-close");
+    const lbZoomIn = document.getElementById("lb-zoom-in");
+    const lbZoomOut = document.getElementById("lb-zoom-out");
+    const lbZoomReset = document.getElementById("lb-zoom-reset");
+    const lbToggleInfo = document.getElementById("lb-toggle-info");
+    const lbInfoPanel = document.getElementById("lb-info-panel");
+    const lbCloseInfo = document.getElementById("lb-close-info");
+    const lbDownload = document.getElementById("lb-download");
+
+    const categories = ["All", ...new Set(galleryItems.map(item => item.category))];
+
+    function renderCategoryTabs() {
+      categoryFiltersContainer.innerHTML = "";
+      categories.forEach(cat => {
+        const count = cat === "All" ? galleryItems.length : galleryItems.filter(i => i.category === cat).length;
+        const isActive = currentCategory === cat && !onlyFavorites;
+
+        const btn = document.createElement("button");
+        btn.className = `flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+          isActive 
+            ? "bg-brand-600 text-white shadow-lg shadow-brand-500/25 ring-2 ring-brand-500/40" 
+            : "bg-slate-900/90 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border border-slate-800"
+        }`;
+        btn.innerHTML = `
+          <span>${cat}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'}">${count}</span>
+        `;
+        btn.addEventListener("click", () => {
+          onlyFavorites = false;
+          updateFavFilterButtonState();
+          currentCategory = cat;
+          renderCategoryTabs();
+          applyFilters();
+        });
+        categoryFiltersContainer.appendChild(btn);
+      });
+    }
+
+    function applyFilters() {
+      filteredList = galleryItems.filter(item => {
+        const matchesCategory = (currentCategory === "All" || item.category === currentCategory);
+        const q = searchQuery.toLowerCase().trim();
+        const matchesSearch = !q || (
+          item.title.toLowerCase().includes(q) ||
+          item.location.toLowerCase().includes(q) ||
+          item.tags.some(t => t.toLowerCase().includes(q)) ||
+          item.photographer.toLowerCase().includes(q)
+        );
+        const matchesFav = !onlyFavorites || favorites.has(item.id);
+
+        return matchesCategory && matchesSearch && matchesFav;
+      });
+
+      renderGallery();
+    }
+
+    function renderGallery() {
+      galleryContainer.innerHTML = "";
+      showingCountSpan.textContent = `Showing ${filteredList.length} Photos`;
+      favCountSpan.textContent = favorites.size;
+
+      if (filteredList.length === 0) {
+        galleryContainer.classList.add("hidden");
+        emptyState.classList.remove("hidden");
+        return;
+      }
+
+      galleryContainer.classList.remove("hidden");
+      emptyState.classList.add("hidden");
+
+      filteredList.forEach((item, index) => {
+        const isFav = favorites.has(item.id);
+        const card = document.createElement("div");
+        card.className = "gallery-card relative group rounded-2xl overflow-hidden bg-slate-900 border border-slate-800/80 shadow-md hover:shadow-2xl hover:shadow-brand-500/10 hover:border-slate-700/80 cursor-pointer animate-fadeIn";
+
+        card.innerHTML = `
+          <div class="relative overflow-hidden w-full bg-slate-900">
+            <img 
+              src="${item.thumbUrl}" 
+              alt="${item.title}" 
+              loading="lazy" 
+              class="w-full h-auto object-cover transform duration-500 group-hover:scale-105"
+              onerror="this.src='https://placehold.co/600x800/1e293b/94a3b8?text=Image+Unavailable'"
+            />
+            
+            <!-- Hover Overlay -->
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-between p-4 z-10 backdrop-blur-[2px]">
+              
+              <!-- Top Row Badges -->
+              <div class="flex items-center justify-between translate-y-[-8px] group-hover:translate-y-0 transition-transform duration-300">
+                <span class="px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider rounded-md bg-slate-900/80 text-brand-400 border border-slate-700/60 backdrop-blur">
+                  ${item.category}
+                </span>
+                <button 
+                  data-fav-id="${item.id}"
+                  title="${isFav ? 'Remove from favorites' : 'Add to favorites'}"
+                  class="fav-toggle-btn w-8 h-8 rounded-full flex items-center justify-center bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 backdrop-blur transition-transform active:scale-90"
+                >
+                  <i data-lucide="heart" class="w-4 h-4 ${isFav ? 'text-rose-500 fill-rose-500' : 'text-slate-300'}"></i>
+                </button>
+              </div>
+
+              <!-- Bottom Content Details -->
+              <div class="translate-y-2 group-hover:translate-y-0 transition-transform duration-300 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-white font-bold text-base leading-snug drop-shadow">${item.title}</h3>
+                  <div class="w-7 h-7 rounded-full bg-brand-600/90 flex items-center justify-center text-white shadow-md">
+                    <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-300">
+                  <span class="flex items-center gap-1 text-slate-400">
+                    <i data-lucide="map-pin" class="w-3 h-3 text-slate-500"></i> ${item.location}
+                  </span>
+                  <span class="text-slate-400 text-[11px]">by ${item.photographer}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Card Click opens Lightbox (unless clicking favorite button)
+        card.addEventListener("click", (e) => {
+          if (e.target.closest(".fav-toggle-btn")) return;
+          openLightbox(index);
+        });
+
+        // Favorite Toggle handler
+        const favBtn = card.querySelector(".fav-toggle-btn");
+        favBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleFavorite(item.id);
+        });
+
+        galleryContainer.appendChild(card);
+      });
+
+      // Refresh icons in dynamically created cards
+      lucide.createIcons();
+    }
+
+    function toggleFavorite(id) {
+      if (favorites.has(id)) {
+        favorites.delete(id);
+      } else {
+        favorites.add(id);
+      }
+      favCountSpan.textContent = favorites.size;
+      renderGallery();
+    }
+
+    function updateFavFilterButtonState() {
+      if (onlyFavorites) {
+        favFilterBtn.classList.add("bg-brand-600", "text-white", "border-brand-500");
+        favFilterBtn.classList.remove("bg-slate-900", "text-slate-300");
+      } else {
+        favFilterBtn.classList.remove("bg-brand-600", "text-white", "border-brand-500");
+        favFilterBtn.classList.add("bg-slate-900", "text-slate-300");
+      }
+    }
+
+    favFilterBtn.addEventListener("click", () => {
+      onlyFavorites = !onlyFavorites;
+      updateFavFilterButtonState();
+      renderCategoryTabs();
+      applyFilters();
+    });
+
+    function handleSearch(val) {
+      searchQuery = val;
+      searchInput.value = val;
+      mobileSearchInput.value = val;
+      if (val.trim()) {
+        clearSearchBtn.classList.remove("hidden");
+      } else {
+        clearSearchBtn.classList.add("hidden");
+      }
+      applyFilters();
+    }
+
+    searchInput.addEventListener("input", (e) => handleSearch(e.target.value));
+    mobileSearchInput.addEventListener("input", (e) => handleSearch(e.target.value));
+    clearSearchBtn.addEventListener("click", () => handleSearch(""));
+
+    resetFiltersBtn.addEventListener("click", () => {
+      currentCategory = "All";
+      searchQuery = "";
+      onlyFavorites = false;
+      searchInput.value = "";
+      mobileSearchInput.value = "";
+      clearSearchBtn.classList.add("hidden");
+      updateFavFilterButtonState();
+      renderCategoryTabs();
+      applyFilters();
+    });
+
+    function openLightbox(index) {
+      if (!filteredList.length) return;
+      activeLightboxIndex = index;
+      zoomLevel = 1;
+      updateLightboxImage();
+
+      lightboxModal.classList.remove("opacity-0", "pointer-events-none");
+      lightboxModal.classList.add("opacity-100");
+      document.body.classList.add("overflow-hidden");
+    }
+
+    function closeLightbox() {
+      lightboxModal.classList.add("opacity-0", "pointer-events-none");
+      lightboxModal.classList.remove("opacity-100");
+      document.body.classList.remove("overflow-hidden");
+      resetZoom();
+      closeInfo();
+    }
+
+    function updateLightboxImage() {
+      const item = filteredList[activeLightboxIndex];
+      if (!item) return;
+
+      // Animate transition with quick opacity fade
+      lbImage.style.opacity = "0.2";
+      lbImage.style.transform = `scale(${zoomLevel})`;
+
+      const imgLoader = new Image();
+      imgLoader.src = item.url;
+      imgLoader.onload = () => {
+        lbImage.src = item.url;
+        lbImage.alt = item.title;
+        lbImage.style.opacity = "1";
+      };
+
+      // Update counters and labels
+      lbCounter.textContent = `${String(activeLightboxIndex + 1).padStart(2, '0')} / ${String(filteredList.length).padStart(2, '0')}`;
+      lbTitleTop.textContent = item.title;
+      lbDetailTitle.textContent = item.title;
+      lbDetailDesc.textContent = item.description;
+      lbCategory.textContent = item.category;
+      lbPhotographer.textContent = item.photographer;
+      lbLocation.textContent = item.location;
+      lbCamera.textContent = item.camera;
+      lbRes.textContent = item.resolution;
+
+      // Tags
+      lbTags.innerHTML = item.tags.map(t => 
+        `<span class="px-2 py-0.5 bg-slate-800 text-slate-300 rounded text-[11px] font-mono border border-slate-700/60">#${t}</span>`
+      ).join('');
+
+      lbDownload.onclick = () => {
+        window.open(item.url, '_blank');
+      };
+    }
+
+    function nextPhoto() {
+      if (filteredList.length <= 1) return;
+      activeLightboxIndex = (activeLightboxIndex + 1) % filteredList.length;
+      resetZoom();
+      updateLightboxImage();
+    }
+
+    function prevPhoto() {
+      if (filteredList.length <= 1) return;
+      activeLightboxIndex = (activeLightboxIndex - 1 + filteredList.length) % filteredList.length;
+      resetZoom();
+      updateLightboxImage();
+    }
+
+    function setZoom(val) {
+      zoomLevel = Math.min(Math.max(val, 0.75), 3);
+      lbImage.style.transform = `scale(${zoomLevel})`;
+    }
+
+    function resetZoom() {
+      zoomLevel = 1;
+      setZoom(1);
+    }
+
+    lbZoomIn.addEventListener("click", () => setZoom(zoomLevel + 0.25));
+    lbZoomOut.addEventListener("click", () => setZoom(zoomLevel - 0.25));
+    lbZoomReset.addEventListener("click", resetZoom);
+
+    // Toggle Metadata sidebar
+    function toggleInfo() {
+      isInfoPanelOpen = !isInfoPanelOpen;
+      if (isInfoPanelOpen) {
+        lbInfoPanel.classList.remove("translate-y-full", "sm:translate-x-full");
+      } else {
+        closeInfo();
+      }
+    }
+
+    function closeInfo() {
+      isInfoPanelOpen = false;
+      lbInfoPanel.classList.add("translate-y-full", "sm:translate-x-full");
+    }
+
+    lbToggleInfo.addEventListener("click", toggleInfo);
+    lbCloseInfo.addEventListener("click", closeInfo);
+
+    // Event Bindings for Next, Prev, Close
+    lbNextBtn.addEventListener("click", (e) => { e.stopPropagation(); nextPhoto(); });
+    lbPrevBtn.addEventListener("click", (e) => { e.stopPropagation(); prevPhoto(); });
+    lbCloseBtn.addEventListener("click", closeLightbox);
+
+    // Click outside image closes lightbox
+    lightboxModal.addEventListener("click", (e) => {
+      if (e.target === lightboxModal || e.target.id === "lb-viewport" || e.target.id === "lb-image-container") {
+        closeLightbox();
+      }
+    });
+
+    window.addEventListener("keydown", (e) => {
+      const isLbActive = !lightboxModal.classList.contains("pointer-events-none");
+      if (!isLbActive) return;
+
+      switch(e.key) {
+        case "ArrowRight":
+          nextPhoto();
+          break;
+        case "ArrowLeft":
+          prevPhoto();
+          break;
+        case "Escape":
+          closeLightbox();
+          break;
+        case " ":
+          e.preventDefault();
+          toggleInfo();
+          break;
+        case "+":
+        case "=":
+          setZoom(zoomLevel + 0.25);
+          break;
+        case "-":
+          setZoom(zoomLevel - 0.25);
+          break;
+      }
+    });
+
+    // Mobile Swipe Navigation Support
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    lightboxModal.addEventListener("touchstart", (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    lightboxModal.addEventListener("touchend", (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    }, { passive: true });
+
+    function handleSwipe() {
+      const swipeDistance = touchEndX - touchStartX;
+      if (Math.abs(swipeDistance) > 50) {
+        if (swipeDistance < 0) {
+          nextPhoto(); // Swipe left to next
+        } else {
+          prevPhoto(); // Swipe right to prev
+        }
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      renderCategoryTabs();
+      applyFilters();
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
